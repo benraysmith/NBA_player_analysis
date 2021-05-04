@@ -1,5 +1,5 @@
 ---
-title: "NBA_player_select_analysis"
+title: "NBA_Player_sel_analysis"
 output: html_document
 ---
 
@@ -12,31 +12,29 @@ library(broom)
 ## Reading and Cleaning the Raw Data
 
 ```{r read in data}
-df_sal <- read_csv("data/2018-19_nba_player-salaries_raw.csv")
-df_pl_stat <- read_csv("data/2018-19_nba_player-statistics_raw.csv")
-df_team_payroll <- read_csv("data/2019-20_nba_team-payroll_raw.csv")
+df_sal <- read_csv("data_raw/2018-19_nba_player-salaries_raw.csv")
+df_pl_stat <- read_csv("data_raw/2018-19_nba_player-statistics_raw.csv")
+df_team_payroll <- read_csv("data_raw/2019-20_nba_team-payroll_raw.csv")
 ```
 
 [This is a link to the data fields](https://uclearn.canberra.edu.au/courses/9531/pages/data-description-reproducible-data-analysis-project)
 
 **Combine player statistics and player salary data files by *'player names'***
 ```{r combine files}
-
 # join df_sal & df_pl_stat by "player_name"
-df_sal2 <- left_join(x = df_sal, y = df_pl_stat,
-by = c("player_name")) # which vars to match on > str(data_left)
+df_players <- left_join(x = df_sal, y = df_pl_stat, by = c("player_name"))
 ```
 
 
 ```{r write new file}
-write.csv(df_sal2, file = 'data/ben_test.csv', row.names = FALSE)
+write.csv(df_players, file = 'data_processed/2018-19_nba_player-salaries-stats_.csv', row.names = FALSE)
 ```
 
 
 
 
 ```{r data structure}
-str(df_sal2)
+
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
