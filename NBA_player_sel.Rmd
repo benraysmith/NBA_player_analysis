@@ -11,13 +11,47 @@ library(broom)
 
 ## Reading and Cleaning the Raw Data
 
-```{r read in data}
+```{r read in data, include=FALSE}
 df_sal <- read_csv("data_raw/2018-19_nba_player-salaries_raw.csv")
 df_pl_stat <- read_csv("data_raw/2018-19_nba_player-statistics_raw.csv")
 df_team_payroll <- read_csv("data_raw/2019-20_nba_team-payroll_raw.csv")
+df_team_ptsMP <- read_csv("data_raw/2018-19_nba_team-statistics_2_raw.csv")
+df_team_WL <- read_csv("data_raw/2018-19_nba_team-statistics_1_raw.csv")
 ```
 
+```{r convert payroll(cha) to num and scale, include=FALSE}
+df_team_payroll$COL1 <- as.numeric(gsub('[$,]', '', df_team_payroll$salary))
+df_team_payroll <- mutate(df_team_payroll, COL2 = COL1/1000000)
+```
+
+```{r add column, include=FALSE}
+df_team_ptsMP <- mutate(df_team_ptsMP, pts_MP = PTS / MP)
+```
+
+
 [This is a link to the data fields](https://uclearn.canberra.edu.au/courses/9531/pages/data-description-reproducible-data-analysis-project)
+
+**Chicago Bulls payroll is 24th or the 30 NBA teams**
+```{r}
+# Barplot team payrolls
+team_sal <- ggplot(data = df_team_payroll, aes(x = reorder(team, COL2), y = COL2)) +
+  geom_bar(stat="identity")
+# Horizontal bar plot
+new <- team_sal + coord_flip(ylim = c(50, 160))
+#label axes
+new + labs(x = "Team", y = "Team payroll (millions)")
+```
+**Chicago Bulls are ranked 29th of 30 in season average points scored per minute played**
+```{r barplot}
+# team average pts per minute
+team_ptsMP <- ggplot(data = df_team_ptsMP, aes(x = reorder(Team, pts_MP), y = pts_MP)) +
+  geom_bar(stat="identity")
+# Horizontal bar plot
+new2 <- team_ptsMP + coord_flip(ylim = c(0.4, 0.5))
+#label axes
+new2 + labs(x = "Team", y = "Team avge points/minute played")
+```
+
 
 **Combine player statistics and player salary data files by *'player names'***
 ```{r combine files}
@@ -30,11 +64,24 @@ df_players <- left_join(x = df_sal, y = df_pl_stat, by = c("player_name"))
 write.csv(df_players, file = 'data_processed/2018-19_nba_player-salaries-stats_.csv', row.names = FALSE)
 ```
 
+Clean processed data file
+```{r visualise missing data}
+sum(is.na(df_players)) 
+naniar::vis_miss(df_players)
+#filter out players with no position or game time
+df_pl_clean <- drop_na(df_players, Pos)
+naniar::vis_miss(df_pl_clean)
+```
 
 
+**Create normalised data by adding variable "points per minute played"**
+```{r create pts per min played}
+df_pl_pts <- df_pl_clean %>%
+  mutate(pts_per_min = PTS/MP) %>%
+  group_by(player_id) %>%
+  summarise(mean(pts_per_min))
 
-```{r data structure}
-
+head(df_pl_pts, 20)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
