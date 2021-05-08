@@ -2,7 +2,10 @@
 title: "NBA_Player_sel_analysis"
 output: html_document
 ---
+### Introduction
 
+Normalisescoring rates by standardising to score per 40 min (Kubatko, 2007)
+several models have been attempted (Spector 2020). difficult to predict how 5 opponents will perform WITH each otehr and also against an opposition
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
@@ -24,8 +27,9 @@ df_team_payroll$COL1 <- as.numeric(gsub('[$,]', '', df_team_payroll$salary))
 df_team_payroll <- mutate(df_team_payroll, COL2 = COL1/1000000)
 ```
 
+Add standardised team scoring rate per 40min period (Kubatko, 2007), and win%
 ```{r add column, include=FALSE}
-df_team_ptsMP <- mutate(df_team_ptsMP, pts_MP = PTS / MP)
+df_team_pts40 <- mutate(df_team_ptsMP, team_pts40 = (PTS / MP)* 40 )
 ```
 
 
@@ -39,17 +43,128 @@ team_sal <- ggplot(data = df_team_payroll, aes(x = reorder(team, COL2), y = COL2
 # Horizontal bar plot
 new <- team_sal + coord_flip(ylim = c(50, 160))
 #label axes
-new + labs(x = "Team", y = "Team payroll (millions)")
+new + labs(title = "Team payroll (2018-19)", face = "italics", x = "Team", y = "Millions") 
 ```
+**Win % versus team salary**
+```{r barplot}
+df_team_WL <- mutate(df_team_WL, winP = (W / (W + L)* 100))
+#add win% column
+df_team_pts40 <- bind_cols(df_team_pts40, df_team_WL[-c(1:25)])
+# team average pts per minute
+team_pts40 <- ggplot(data = df_team_pts40, aes(x = reorder(Team, winP), y = winP)) +
+  geom_bar(stat="identity")
+# Horizontal bar plot
+new1 <- team_pts40 + coord_flip(ylim = c(20, 75)) +
+  labs(title = "Team game win percentages (2018-19)", x = "Team", y = "Win %")
+new1
+```
+
+
+
 **Chicago Bulls are ranked 29th of 30 in season average points scored per minute played**
 ```{r barplot}
 # team average pts per minute
-team_ptsMP <- ggplot(data = df_team_ptsMP, aes(x = reorder(Team, pts_MP), y = pts_MP)) +
+ggteam_pts40 <- ggplot(data = df_team_pts40, aes(x = reorder(Team, team_pts40), y = team_pts40)) +
   geom_bar(stat="identity")
 # Horizontal bar plot
-new2 <- team_ptsMP + coord_flip(ylim = c(0.4, 0.5))
-#label axes
-new2 + labs(x = "Team", y = "Team avge points/minute played")
+new2 <- ggteam_pts40 + coord_flip(ylim = c(17, 20)) +
+  labs(title = "Team average points scored per 40 minutes played (2018-19)", x = "Team", y = "Points / 40 Minutes")
+new2
+```
+*standardise variables to events per 40min*
+```{r establish new variables}
+df_team_pts40 <- mutate(df_team_pts40, pts_involve40 = ((AST + PTS)/ MP)* 40)
+df_team_pts40 <- mutate(df_team_pts40, AST40 = (AST / MP)* 40)
+df_team_pts40 <- mutate(df_team_pts40, TOV40 = (TOV / MP)* 40)
+df_team_pts40 <- mutate(df_team_pts40, STL40 = (STL / MP)* 40)
+df_team_pts40 <- mutate(df_team_pts40, BLK40 = (BLK / MP)* 40)
+df_team_pts40 <- mutate(df_team_pts40, PF40 = (PF / MP)* 40)
+df_team_pts40 <- mutate(df_team_pts40, TRB40 = (TRB / MP)* 40)
+
+
+df_players <- mutate(df_players, pts_involve40 = ((AST + PTS)/ MP)* 40)
+df_players <- mutate(df_players, AST40 = (AST / MP)* 40)
+df_players <- mutate(df_players, TOV40 = (TOV / MP)* 40)
+df_players <- mutate(df_players, STL40 = (STL / MP)* 40)
+df_players <- mutate(df_players, BLK40 = (BLK / MP)* 40)
+df_players <- mutate(df_players, PF40 = (PF / MP)* 40)
+df_players <- mutate(df_players, TRB40 = (TRB / MP)* 40)
+```
+
+
+**correlation wins and points scored**
+```{r}
+#points vs win%
+df_team_pts40 %>%
+  ggplot(aes(PTS, winP)) + 
+  geom_point(colour = "dodgerblue") +
+  ylim(0, 100) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE) +
+  geom_hline(yintercept = 50, colour = "black", linetype = "dashed")
+cor(x = df_team_pts40$PTS, y = df_team_pts40$winP, method = "pearson")
+  
+#points/40 vs win%
+df_team_pts40 %>%
+  ggplot(aes(x = team_pts40,y = winP)) + 
+  geom_point(colour = "dodgerblue") +
+  ylim(0, 100) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE) +
+  geom_hline(yintercept = 50, colour = "black", linetype = "dashed")
+cor(x = df_team_pts40$team_pts40, y = df_team_pts40$winP, method = "pearson")
+
+#assists vs win%
+df_team_pts40 %>%
+  ggplot(aes(x = AST40,y = winP)) + 
+  geom_point(colour = "dodgerblue") +
+  ylim(0, 100) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE) +
+  geom_hline(yintercept = 50, colour = "black", linetype = "dashed")
+cor(x = df_team_pts40$AST40, y = df_team_pts40$winP, method = "pearson")
+
+#turnovers vs win%
+df_team_pts40 %>%
+  ggplot(aes(x = TOV40,y = winP)) + 
+  geom_point(colour = "dodgerblue") +
+  ylim(0, 100) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE) +
+  geom_hline(yintercept = 50, colour = "black", linetype = "dashed")
+cor(x = df_team_pts40$TOV40, y = df_team_pts40$winP, method = "pearson")
+
+#steals vs win%
+df_team_pts40 %>%
+  ggplot(aes(x = STL40,y = winP)) + 
+  geom_point(colour = "dodgerblue") +
+  ylim(0, 100) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE) +
+  geom_hline(yintercept = 50, colour = "black", linetype = "dashed")
+cor(x = df_team_pts40$STL40, y = df_team_pts40$winP, method = "pearson")
+
+#blocks vs win%
+df_team_pts40 %>%
+  ggplot(aes(x = BLK40,y = winP)) + 
+  geom_point(colour = "dodgerblue") +
+  ylim(0, 100) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE) +
+  geom_hline(yintercept = 50, colour = "black", linetype = "dashed")
+cor(x = df_team_pts40$BLK40, y = df_team_pts40$winP, method = "pearson")
+
+#fouls vs win%
+df_team_pts40 %>%
+  ggplot(aes(x = PF40,y = winP)) + 
+  geom_point(colour = "dodgerblue") +
+  ylim(0, 100) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE) +
+  geom_hline(yintercept = 50, colour = "black", linetype = "dashed")
+cor(x = df_team_pts40$PF40, y = df_team_pts40$winP, method = "pearson")
+
+#total rebounds vs win%
+df_team_pts40 %>%
+  ggplot(aes(x = TRB40,y = winP)) + 
+  geom_point(colour = "dodgerblue") +
+  ylim(0, 100) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE) +
+  geom_hline(yintercept = 50, colour = "black", linetype = "dashed")
+cor(x = df_team_pts40$TRB40, y = df_team_pts40$winP, method = "pearson")
 ```
 
 
@@ -74,14 +189,145 @@ naniar::vis_miss(df_pl_clean)
 ```
 
 
-**Create normalised data by adding variable "points per minute played"**
-```{r create pts per min played}
-df_pl_pts <- df_pl_clean %>%
-  mutate(pts_per_min = PTS/MP) %>%
-  group_by(player_id) %>%
-  summarise(mean(pts_per_min))
-
-head(df_pl_pts, 20)
+join Pl pts to all player data, add column sal.mil
+```{r add player pts/40min to master player data file} 
+df_players <- left_join(x = df_pl_pts, y = df_players, by = c("player_id"))
+str(df_players)
+df_players <- mutate(df_players, salmil = salary / 100000)
 ```
+
+**Create normalised data by adding variable "points per minute played"**
+Explore the data filter out games less than 10 to minimise outliers
+```{r}
+ggplot(data = df_players) +
+ geom_histogram(mapping = aes(x = salmil), colour = "black", fill = "dodgerblue") +
+  labs(x = "millions", y = "number of players", title = "Player salary distribution per year")
+
+df_players <- mutate(df_players, pts40 = (PTS / MP)* 40)
+
+df_players %>%
+  group_by(player_id) %>%
+  ggplot() +
+  geom_histogram(mapping = aes(x = pts40), colour = "black", fill = "dodgerblue") +
+  labs(x = "points per minutes played", y = "number of players", title = "Distribution of points scored per minute played", subtitle = "(games played > 10)")
+
+df_players %>%
+  group_by(player_id) %>%
+  filter(G > 10) %>%
+  ggplot() +
+  geom_histogram(mapping = aes(x = pts40), colour = "black", fill = "dodgerblue") +
+  labs(x = "points per minutes played", y = "number of players", title = "Distribution of points scored per minute played", subtitle = "(games played > 10)")
+```
+```{r}
+#points vs win%
+df_players %>% filter(G > 10) %>%
+  ggplot(aes(TRB40, pts_involve40)) + 
+  geom_point(colour = "dodgerblue", alpha = 0.7) +
+  ylim(0, 50) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE)
+cor(x = df_players$TRB40, y = df_players$pts_involve40, method = "pearson")
+  
+#points/40 vs win%
+df_players %>% filter(G > 10) %>%
+  ggplot(aes(STL40, pts_involve40)) + 
+  geom_point(colour = "dodgerblue", alpha = 0.7) +
+  ylim(0, 50) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE)
+cor(x = df_players$STL40, y = df_players$pts_involve40, method = "pearson")
+
+#assists vs win%
+df_players %>% filter(G > 10) %>%
+  ggplot(aes(BLK40, pts_involve40)) + 
+  geom_point(colour = "dodgerblue", alpha = 0.7) +
+  ylim(0, 50) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE)
+cor(x = df_players$BLK40, y = df_players$pts_involve40, method = "pearson")
+
+#turnovers vs win%
+df_players %>% filter(G > 10) %>%
+  ggplot(aes(TOV40, pts_involve40)) + 
+  geom_point(colour = "dodgerblue", alpha = 0.7) +
+  ylim(0, 50) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE)
+cor(x = df_players$TOV40, y = df_players$pts_involve40, method = "pearson")
+
+#steals vs win%
+df_players %>% filter(G > 10) %>%
+  ggplot(aes(PF40, pts_involve40)) + 
+  geom_point(colour = "dodgerblue", alpha = 0.7) +
+  ylim(0, 50) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE)
+cor(x = df_players$PF40, y = df_players$pts_involve40, method = "pearson")
+
+#blocks vs win%
+df_players %>% filter(G > 10) %>%
+  ggplot(aes(TRB40, pts_involve40)) + 
+  geom_point(colour = "dodgerblue", alpha = 0.7) +
+  ylim(0, 50) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE)
+cor(x = df_players$TRB40, y = df_players$pts_involve40, method = "pearson")
+
+#fouls vs win%
+df_players %>% filter(G > 10) %>%
+  ggplot(aes(TRB40, pts_involve40)) + 
+  geom_point(colour = "dodgerblue", alpha = 0.7) +
+  ylim(0, 50) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE)
+cor(x = df_players$TRB40, y = df_players$pts_involve40, method = "pearson")
+
+#total rebounds vs win%
+df_players %>% filter(G > 10) %>%
+  ggplot(aes(TRB40, pts_involve40)) + 
+  geom_point(colour = "dodgerblue", alpha = 0.7) +
+  ylim(0, 50) +
+  geom_smooth(method = "lm", colour = "magenta", se = FALSE)
+cor(x = df_players$TRB40, y = df_players$pts_involve40, method = "pearson")
+```
+```
+
+
+
+look for relationships b/t MP and points per game and salary
+```{r look for correlations}
+#points per minute played
+df_players %>% 
+  group_by(player_id) %>%
+  filter(G > 10, PTS > 0) %>% 
+  ggplot() + 
+  geom_point(mapping = aes(x = MP, PTS), alpha = 0.5)
+
+#points per minute played / minutes played
+df_players %>% filter(G > 10, PTS > 0) %>% group_by(player_id) %>%
+  ggplot(aes(MP, pts40)) + 
+  geom_point(alpha = 0.5)
+
+#salary by points per minutes played
+df_players %>% filter(G > 10, PTS > 0) %>% group_by(player_id) %>%
+  ggplot(mapping = aes(x = salmil, y = pts40, colour = Pos)) + 
+  geom_point()
+
+
+df_players %>%
+  filter(G > 10, PTS > 0) %>%
+  ggplot() +
+  geom_boxplot(mapping = aes(x = reorder(Pos, pts40, FUN = median),
+                             y = pts40, colour = reorder(Pos, pts40,
+                                                              FUN = median))) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45))
+```
+
+look for correlation b/t pts_MP & 3P_MP by salary
+```{r}
+pairs(formula = ~PTS + AST + GS + salmil, data = df_players)
+```
+```{r}
+df_players %>%
+filter(G > 10, Pos == c("C", "PF", "SG", "SF", "PG")) %>% 
+ggplot() +
+geom_histogram(aes(x = pts_involve40, fill = Pos), colour = "black", bins = 40) + facet_wrap(~Pos, nrow = 5) # create panels by match_outcome
+```
+
+
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
