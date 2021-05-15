@@ -14,7 +14,7 @@ library(broom)
 
 ## Reading and Cleaning the Raw Data
 
-```{r read in data, include=FALSE}
+```{r read in data, echo=FALSE, include=FALSE}
 df_sal <- read_csv("data_raw/2018-19_nba_player-salaries_raw.csv")
 df_players <- read_csv("data_raw/2018-19_nba_player-statistics_raw.csv")
 df_team_payroll <- read_csv("data_raw/2019-20_nba_team-payroll_raw.csv")
@@ -46,7 +46,7 @@ new <- team_sal + coord_flip(ylim = c(50, 160))
 new + labs(title = "Team payroll (2018-19)", face = "italics", x = "Team", y = "Millions") 
 ```
 **Win % versus team salary**
-```{r barplot}
+```{r}
 df_team_WL <- mutate(df_team_WL, winP = (W / (W + L)* 100))
 #add win% column
 df_team_pts40 <- bind_cols(df_team_pts40, df_team_WL[-c(1:25)])
@@ -73,16 +73,17 @@ new2
 ```
 *standardise variables to events per 40min*
 ```{r establish new variables}
-df_team_pts40 <- mutate(df_team_pts40, AST40 = (AST / MP)* 40)
-df_team_pts40 <- mutate(df_team_pts40, TOV40 = (TOV / MP)* 40)
-df_team_pts40 <- mutate(df_team_pts40, STL40 = (STL / MP)* 40)
-df_team_pts40 <- mutate(df_team_pts40, BLK40 = (BLK / MP)* 40)
-df_team_pts40 <- mutate(df_team_pts40, PF40 = (PF / MP)* 40)
-df_team_pts40 <- mutate(df_team_pts40, TRB40 = (TRB / MP)* 40)
-df_team_pts40 <- mutate(df_team_pts40, ORB40 = (ORB / MP)* 40)
-df_team_pts40 <- mutate(df_team_pts40, DRB40 = (DRB / MP)* 40)
-df_team_pts40 <- mutate(df_team_pts40, FG40 = (FG / MP)* 40)
-df_team_pts40 <- mutate(df_team_pts40, FGA40 = (FGA / MP)* 40)
+df_team_pts40 <- df_team_pts40 %>%
+  mutate(AST40 = (AST / MP)* 40,
+         TOV40 = (TOV / MP)* 40,
+         STL40 = (STL / MP)* 40,
+         BLK40 = (BLK / MP)* 40,
+         PF40 = (PF / MP)* 40,
+         TRB40 = (TRB / MP)* 40,
+         ORB40 = (ORB / MP)* 40,
+         DRB40 = (DRB / MP)* 40,
+         FG40 = (FG / MP)* 40,
+         FGA40 = (FGA / MP)* 40)
 ```
 
 
@@ -143,7 +144,7 @@ df_team_pts40 %>%
   geom_hline(yintercept = 50, colour = "black", linetype = "dashed")
 cor(x = df_team_pts40$PF40, y = df_team_pts40$winP, method = "pearson")
 
-#total rebounds vs win%
+#TRB vs win%
 df_team_pts40 %>%
   ggplot(aes(x = TRB40,y = winP)) + 
   geom_point(colour = "dodgerblue") +
@@ -290,6 +291,7 @@ df_players %>%
   ggplot() +
   geom_histogram(mapping = aes(x = pts40), colour = "black", fill = "dodgerblue") +
   labs(x = "points per minutes played", y = "number of players", title = "Distribution of points scored per minute played", subtitle = "(games played > 10)")
+
 ```
 
 merge rows, add column sal.mil
@@ -310,6 +312,7 @@ df_players <- bind_rows(df_players) %>%
             AST = sum(AST, na.rm = TRUE),
             BLK = sum(BLK, na.rm = TRUE),
             PTS = sum(PTS, na.rm = TRUE))
+              ungroup(df_players)
 
 df_players40 <- bind_rows(df_players) %>%
    group_by(player_id, player_name) %>%
@@ -321,16 +324,24 @@ df_players40 <- bind_rows(df_players) %>%
             BLK = sum(BLK, na.rm = TRUE),
             PTS = sum(PTS, na.rm = TRUE))
 
-df_players <- mutate(df_players, pts40_ind = (PTS / MP)* 40)
-df_players <- mutate(df_players, AST40 = (AST / MP)* 40)
-df_players <- mutate(df_players, BLK40 = (BLK / MP)* 40)
-df_players <- mutate(df_players, TRB40 = (TRB / MP)* 40)
+df_players <- df_players %>%
+  mutate(pts40_ind = (PTS / MP)* 40,
+         AST40 = (AST / MP)* 40,
+         BLK40 = (BLK / MP)* 40,
+         TRB40 = (TRB / MP)* 40)
 
-df_players40 <- mutate(df_players40, pts40_ind = (PTS / MP)* 40)
-df_players40 <- mutate(df_players40, AST40 = (AST / MP)* 40)
-df_players40 <- mutate(df_players40, BLK40 = (BLK / MP)* 40)
-df_players40 <- mutate(df_players40, TRB40 = (TRB / MP)* 40)
+df_players40 <- df_players40 %>%
+  mutate(pts40_ind = (PTS / MP)* 40,
+         AST40 = (AST / MP)* 40,
+         BLK40 = (BLK / MP)* 40,
+         TRB40 = (TRB / MP)* 40)
+
+#exclude data from score value zero
+df_players <- df_players[!is.na(df_players$pts40_ind), ]
+#eclude players who haven't played a game
+df_players <- df_players[df_players$G != 0, ]
 ```
+Remove all missing data rows
 
 
 look for relationships b/t Player positions and Explanatory Variables
@@ -377,25 +388,56 @@ df_players %>%
         axis.text.x = element_text(angle = 45))
 ```
 
-```{r}
-
+```{r multiple linear regreession, team}
+fit <- lm(winP ~ team_pts40 + AST40 + BLK40 + TRB40, data = df_team_pts40)
+tidy(fit, conf.int = TRUE)
+summary(fit)
 ```
+
+```{r multiple linear regression indiv attack}
+fit_ind_att <- lm(salmil ~ AST40 + pts40_ind, data = df_players40, subset = G > 10)
+tidy(fit_ind_att, conf.int = TRUE)
+summary(fit_ind_att)
+```
+
+```{r multiple linear regression indiv defence}
+fit_ind_def <- lm(salmil ~ BLK40 + TRB40 + pts40_ind, data = df_players40, subset = G > 10)
+tidy(fit_ind_def, conf.int = TRUE)
+summary(fit_ind_def)
+```
+
 
 ** Test Assumptions **
-1. Response variable (team win %) IS continuous
-2. Explanatory variables (assists, blocks & total rebounds are continuous integers)
-3. Independence: potentially fails due to repeated measures of positions
+1. Is the data continuous?
+  - the response and explanatory variables for all three models are continuous
+2. Independence: 
+  - potentially fails in the 1st model (expected wins) due to repeated measures of positions
+  - Results are 1.9 for each of the other models which is close to the recommended '2' to ensure independence.
 ```{r Independence}
+#team win %
 car::durbinWatsonTest(fit)
+#attacking variables
+car::durbinWatsonTest(fit_ind_att)
+#defensive variables
+car::durbinWatsonTest(fit_ind_def)
 ```
 4. Linear relationship
-```{r}
+  - there is a very strong apparent relationship between winning % and Team points which is to be expected. The relationships are less significant with the other variables, however previous exploratory observations identified these variables as being useful in the models to determine correlation with salary.
+```{r linear relatiohsips}
+#team win %
 car::avPlots(fit)
+#attacking variables
+car::avPlots(fit_ind_att)
+#defensive variables
+car::avPlots(fit_ind_def)
 ```
 
 
 5. Detect Outliers:
-```{r}
+  - no outliers sit outside 2.5 SD for the team win % and points model
+  - several potential outliers exist in the attacking and defensive models however after observing hte raw data points identified around 3SD from the mean i am satisfied in accepting these as true data reflecting player specialty attributes in these measurement variables.
+```{r outliers}
+#team win %
 std_res <- rstandard(fit)
 points <- 1:length(std_res)
 res_labels <- if_else(abs(std_res) >= 2.5, paste(points), "")
@@ -404,45 +446,155 @@ ggplot(data = NULL, aes(x = points, y = std_res)) + geom_point() +
 geom_text(aes(label = res_labels), nudge_y = 0.3) + ylim(c(-4,4)) +
 geom_hline(yintercept = c(-2.5, 2.5), colour = "red", linetype = "dashed")
 
-lm +
-geom_text(aes(label = res_labels), nudge_x = 0.002)
-  
+#attacking variables
+std_res_att <- rstandard(fit_ind_att)
+points_att <- 1:length(std_res_att)
+res_labels_att <- if_else(abs(std_res_att) >= 3, paste(points_att), "")
+
+ggplot(data = NULL, aes(x = points_att, y = std_res_att)) + geom_point() +
+geom_text(aes(label = res_labels_att), nudge_y = 0.3) + ylim(c(-4,4)) +
+geom_hline(yintercept = c(-3, 3), colour = "red", linetype = "dashed")
+
+#defensive variables
+std_res_def <- rstandard(fit_ind_def)
+points_def <- 1:length(std_res_def)
+res_labels_def <- if_else(abs(std_res_def) >= 3, paste(points_def), "")
+
+ggplot(data = NULL, aes(x = points_def, y = std_res_def)) + geom_point() +
+geom_text(aes(label = res_labels_def), nudge_y = 0.3) + ylim(c(-4.2,4.2)) +
+geom_hline(yintercept = c(-3, 3), colour = "red", linetype = "dashed")
 ```
-5. Cooks distance
-```{r}
+5. Influential points
+```{r cooks distance}
+#team win %
 cook <- cooks.distance(fit)
-cook_labels <- if_else(cook >= 0.015, paste(points), "")
+cook_labels <- if_else(cook >= 0.2, paste(points), "")
 
 ggplot(data = NULL, aes(x = points, y = cook)) + geom_point() +
 geom_text(aes(label = cook_labels), nudge_y = 0.01)
+
+#attacking variables
+cook <- cooks.distance(fit_ind_att)
+cook_labels <- if_else(cook >= 0.04, paste(points_att), "")
+
+ggplot(data = NULL, aes(x = points_att, y = cook)) + geom_point() +
+geom_text(aes(label = cook_labels), nudge_y = 0.01)
+#defensive variables
+cook <- cooks.distance(fit_ind_def)
+cook_labels <- if_else(cook >= 0.04, paste(points_def), "")
+
+ggplot(data = NULL, aes(x = points_def, y = cook)) + geom_point() +
+geom_text(aes(label = cook_labels), nudge_y = 0.01)
 ```
+```{r remove influenctial points}
+outliers <- c(23, 28, 29)
+filtered_team_df <- df_team_pts40 %>%
+  filter(!Rk %in% outliers)
+
+fit2 <- fit <- lm(winP ~ team_pts40 + AST40 + BLK40 + TRB40, data = filtered_team_df)
+tidy(fit2, conf.int = TRUE)
+summary(fit2)
+```
+** Having looked closely the outliers from the team win percentage model i trust that the data is true team statistic based on real game performances and potentially reflects team styles, therefore will leave this data in the model.
+
 6. Homoscedasticity
-```{r}
- res <- residuals(fit)
+```{r hemoscedasticity}
+#team win %
+res <- residuals(fit)
 fitted <- predict(fit)
 
 ggplot(data = NULL, aes(x = fitted, y = res)) +
   geom_point(colour = "dodgerblue") +
   geom_smooth(se = FALSE, colour = "magenta")
-  
+
+#attacking variables
+res <- residuals(fit_ind_att)
+fitted <- predict(fit_ind_att)
+
+ggplot(data = NULL, aes(x = fitted, y = res)) +
+  geom_point(colour = "dodgerblue") +
+  geom_smooth(se = FALSE, colour = "magenta")
+
+#defensive variables
+res <- residuals(fit_ind_def)
+fitted <- predict(fit_ind_def)
+
+ggplot(data = NULL, aes(x = fitted, y = res)) +
+  geom_point(colour = "dodgerblue") +
+  geom_smooth(se = FALSE, colour = "magenta")
 ```
+Homoscedasticity is maintained for the team win percentage model, yet is present in both individual player models
+
+
+
 7. Normally distributed residuals
 ```{r}
 ggplot(data = NULL, aes(sample = res)) + stat_qq() + stat_qq_line()
+
+ggplot(data = NULL, aes(x = res)) + geom_histogram(colour = "black", fill = "dodgerblue")
 ```
+The data is slightly skewed to the left and tailing to the right, however having investigated the data i am comfortable with the underlying context
 
 8. Multicollinearity
 ```{r}
 #team
-pairs(formula = ~ winP + AST40 + BLK40 + TRB40, data = df_team_pts40)
-
-fit <- lm(winP ~ AST40 + BLK40 + TRB40, data = df_team_pts40)
-tidy(fit, conf.int = TRUE)
-
+pairs(formula = ~ winP + team_pts40 + AST40 + BLK40 + TRB40, data = df_team_pts40)
 sqrt(car::vif(fit))
-
-head(predict(fit))
+#attacking variables
+pairs(formula = ~ salmil + pts40_ind + AST40, data = df_players, subset = G > 10)
+sqrt(car::vif(fit_ind_att))
+#defensive variables
+pairs(formula = ~ salmil + pts40_ind + BLK40 + TRB40, data = df_players, subset = G > 10)
+sqrt(car::vif(fit_ind_def))
 ```
+
+
+```{r}
+new_dat <- df_team_pts40 %>% 
+  select(Team, winP, AST40, BLK40, TRB40, team_pts40)
+
+fit <- lm(winP ~ AST40 + BLK40 + TRB40 + team_pts40, data = df_team_pts40)
+
+new_dat <- mutate(new_dat, exp_win_perc = predict(fit, newdata = new_dat))
+
+ggplot(new_dat, aes(winP, exp_win_perc, label = Team)) + geom_point(colour = "dodgerblue") +
+geom_text(nudge_x = 0.1, cex = 3) +
+geom_abline(linetype = "dashed", colour = "magenta")
+
+#indiv attack
+df_players <- ungroup(df_players)
+
+fit_ind_att <- lm(salmil ~ AST40 + pts40_ind, data = df_players)
+
+df_players <- mutate(df_players, exp_salmil_att = predict(fit_ind_att, newdata = df_players))
+
+df_players %>%
+  filter(G > 10, !Pos %in% c("C", "PF", "C-PF", "PF-C")) %>%
+  ggplot () +
+  geom_point(mapping = aes(x = exp_salmil_att, y = salmil, colour = Pos)) +
+#geom_text(nudge_x = 0.1, cex = 3) +
+geom_abline(linetype = "dashed", colour = "magenta")
+
+#indiv defence
+
+fit_ind_def <- lm(salmil ~ BLK40 + TRB40 + pts40_ind, data = df_players)
+
+df_players <- mutate(df_players, exp_salmil_def = predict(fit_ind_def, newdata = df_players))
+
+df_players %>%
+  filter(G > 10, !Pos %in% c("SG", "SF", "PG", "SF-SG", "SG-SF")) %>%
+  ggplot () +
+  geom_point(mapping = aes(x = exp_salmil_def, y = salmil, colour = Pos)) +
+#geom_text(nudge_x = 0.1, cex = 3) +
+geom_abline(linetype = "dashed", colour = "magenta")
+```
+```{r}
+fit_ind_def <- lm(salmil ~ BLK40 + TRB40 + pts40_ind, data = df_players40)
+
+new_dat_ind <- mutate(new_dat_ind, ext_salmil = predict(fit_ind_def, newdata = new_dat_ind))
+
+```
+
 
 
 
