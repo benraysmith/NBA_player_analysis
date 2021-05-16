@@ -10,6 +10,7 @@ several models have been attempted (Spector 2020). difficult to predict how 5 op
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(broom)
+library(ggrepel)
 ```
 
 ## Reading and Cleaning the Raw Data
@@ -296,7 +297,7 @@ df_players %>%
 
 merge rows, add column sal.mil
 ```{r}
-df_players <- mutate(df_players, salmil = salary / 100000)
+df_players <- mutate(df_players, salmil = salary / 1000000)
 ```
 
 
@@ -307,6 +308,7 @@ df_players <- bind_rows(df_players) %>%
    group_by(player_id, player_name, Pos) %>%
    summarise(salmil = mean(salmil, na.rm = TRUE),
               G = sum(G, na.rm = TRUE),
+             GS = sum(GS, na.rm = TRUE),
              MP = sum(MP, na.rm = TRUE),
             TRB = sum(TRB, na.rm = TRUE),
             AST = sum(AST, na.rm = TRUE),
@@ -318,6 +320,7 @@ df_players40 <- bind_rows(df_players) %>%
    group_by(player_id, player_name) %>%
    summarise(salmil = mean(salmil, na.rm = TRUE),
               G = sum(G, na.rm = TRUE),
+             GS = sum(GS, na.rm = TRUE),
              MP = sum(MP, na.rm = TRUE),
             TRB = sum(TRB, na.rm = TRUE),
             AST = sum(AST, na.rm = TRUE),
@@ -328,13 +331,17 @@ df_players <- df_players %>%
   mutate(pts40_ind = (PTS / MP)* 40,
          AST40 = (AST / MP)* 40,
          BLK40 = (BLK / MP)* 40,
-         TRB40 = (TRB / MP)* 40)
+         TRB40 = (TRB / MP)* 40, 
+         GMP = (MP / G),
+         Pts_G = (GMP/40)* pts40_ind)
 
 df_players40 <- df_players40 %>%
   mutate(pts40_ind = (PTS / MP)* 40,
          AST40 = (AST / MP)* 40,
          BLK40 = (BLK / MP)* 40,
-         TRB40 = (TRB / MP)* 40)
+         TRB40 = (TRB / MP)* 40,
+         GMP = (MP / G),
+         Pts_G = (GMP/40)* pts40_ind)
 
 #exclude data from score value zero
 df_players <- df_players[!is.na(df_players$pts40_ind), ]
@@ -549,17 +556,71 @@ sqrt(car::vif(fit_ind_def))
 ```
 
 
+**#Model outputs#**
+
+**##Model descriptions##**
+*###(all explanatory variables are standardised to a rate of 'per 40min')###*
+$Y = Bo + B1x1 + B2x2...+ Bnxn$
+
+**###Team win %###**
+$Team Win % = -324 + (21.42 x Team Points) + (-2.06 x Assists) + (10.54 x Block) + (-2.92 x Total Rebounds)$
+
+**###Evaluation of Salary (millions) 'worth' for key offensive positions###**
+- Point Guard (PG)
+- Shooting Guard (SG)
+- Small Forward (SF)
+
+$Salary estimate = -5.760 + (7.66 x Assists) + (6.11 x Points Scored)$
+
+**###Evaluation of Salary (millions) 'worth' for key opposition shutdown players###**
+- Centre (C)
+- Power Forward (PF)
+
+$Salary estimate = -5.337 + (-9.20 x Blocks) + (3.22 x Total Rebounds) + (6.58 x Points Scored)$
+
+
+
+```{r}
+#TRB
+df_players %>%
+filter(G > 10, Pos %in% c("C", "PF", "PG", "SF", "SG")) %>% 
+ggplot() +
+geom_histogram(aes(x = TRB40, fill = Pos), colour = "black", bins = 40) + facet_wrap(~Pos, nrow = 5)
+
+#BLK
+df_players %>%
+filter(G > 10, Pos %in% c("C", "PF", "PG", "SF", "SG")) %>% 
+ggplot() +
+geom_histogram(aes(x = BLK40, fill = Pos), colour = "black", bins = 40) + facet_wrap(~Pos, nrow = 5)
+
+#assist
+df_players %>%
+filter(G > 10, Pos %in% c("C", "PF", "PG", "SF", "SG")) %>% 
+ggplot() +
+geom_histogram(aes(x = AST40, fill = Pos), colour = "black", bins = 40) + facet_wrap(~Pos, nrow = 5)
+
+#pts40
+df_players %>%
+filter(G > 10, Pos %in% c("C", "PF", "PG", "SF", "SG")) %>% 
+ggplot() +
+geom_histogram(aes(x = pts40_ind, fill = Pos), colour = "black", bins = 40) + facet_wrap(~Pos, nrow = 5)
+# create panels by match_outcome
+```
+
+
 ```{r}
 new_dat <- df_team_pts40 %>% 
-  select(Team, winP, AST40, BLK40, TRB40, team_pts40)
+  select(Team, winP, team_pts40, AST40, BLK40, TRB40)
 
 fit <- lm(winP ~ AST40 + BLK40 + TRB40 + team_pts40, data = df_team_pts40)
 
 new_dat <- mutate(new_dat, exp_win_perc = predict(fit, newdata = new_dat))
 
 ggplot(new_dat, aes(winP, exp_win_perc, label = Team)) + geom_point(colour = "dodgerblue") +
-geom_text(nudge_x = 0.1, cex = 3) +
+geom_text_repel(nudge_x = 4, cex = 3) +
 geom_abline(linetype = "dashed", colour = "magenta")
+#test correlation between expected win % from the model and actual win %
+cor(x = new_dat$winP, y = new_dat$exp_win_perc, method = "pearson")
 
 #indiv attack
 df_players <- ungroup(df_players)
@@ -576,7 +637,6 @@ df_players %>%
 geom_abline(linetype = "dashed", colour = "magenta")
 
 #indiv defence
-
 fit_ind_def <- lm(salmil ~ BLK40 + TRB40 + pts40_ind, data = df_players)
 
 df_players <- mutate(df_players, exp_salmil_def = predict(fit_ind_def, newdata = df_players))
@@ -588,69 +648,107 @@ df_players %>%
 #geom_text(nudge_x = 0.1, cex = 3) +
 geom_abline(linetype = "dashed", colour = "magenta")
 ```
-```{r}
-fit_ind_def <- lm(salmil ~ BLK40 + TRB40 + pts40_ind, data = df_players40)
 
-new_dat_ind <- mutate(new_dat_ind, ext_salmil = predict(fit_ind_def, newdata = new_dat_ind))
+```{r add selection variables}
+#attack discrepancy by score productivity
+Selection_att <- df_players %>%
+  filter(G > 10, GS > 10, !Pos %in% c("C", "PF", "C-PF", "PF-C")) %>%
+  mutate(discrp_att = exp_salmil_att - salmil,
+         sc_inv = pts40_ind + AST40,
+         rank_att = discrp_att / (pts40_ind + AST40))
+#Defence
+Selection_def <- df_players %>%
+  filter(G > 10, GS > 10, !Pos %in% c("SG", "SF", "PG", "SF-SG", "SG-SF")) %>%
+  mutate(discrp_def = exp_salmil_def - salmil,
+         sc_def = pts40_ind + BLK40 + TRB40, 
+         rank_def = discrp_def / sc_def)
+```
+
+```{r selection tables}
+#Show selection of players with score involvements
+Selection_att %>%
+  filter(G > 10, GS > 10, !Pos %in% c("C", "PF", "C-PF", "PF-C")) %>%
+  ggplot () +
+  geom_point(mapping = aes(x = rank_att, y = sc_inv, colour = Pos, size = salmil, alpha = 1)) +
+  geom_vline(xintercept = (0), colour = "grey", linetype = "dashed") +
+  geom_hline(yintercept = 30, colour = "grey", linetype = "dashed") +
+  geom_text_repel(data = Selection_att %>% 
+               filter(sc_inv > 30), aes(x = rank_att, y = sc_inv, label = player_name, colour = Pos))
+
+#Show selection of players with both attacking and defensive contributions
+Selection_def %>%
+  filter(G > 10, GS > 10, !Pos %in% c("SG", "SF", "PG", "SF-SG", "SG-SF")) %>%
+  ggplot () +
+  geom_point(mapping = aes(x = rank_def, y = sc_def, colour = Pos, size = salmil, alpha = 1)) +
+  geom_vline(xintercept = 0, colour = "grey", linetype = "dashed") +
+  geom_hline(yintercept = 37, colour = "grey", linetype = "dashed") +
+  geom_text_repel(data = Selection_def %>% 
+               filter(sc_def > 37), aes(x = rank_def, y = sc_def, label = player_name, colour = Pos))
+```
+
+Team Selection
+$Team Win % = -324 + (21.42 x Team Points) + (-2.06 x Assists) + (10.54 x Block) + (-2.92 x Total Rebounds)$
+```{r}
+#Select players by name
+PG <- "D'Angelo Russell"
+SF <- "LeBron James"
+SG <- "Devin Booker"
+C <- "Karl-Anthony Towns"
+PF <- "John Collins"
+
+#Total Team Points / 40min
+Team_Points <- df_players %>%
+  with(mean(Pts_G[player_name == PG],
+       Pts_G[player_name == SF],
+       Pts_G[player_name == SG],
+       Pts_G[player_name == C],
+       Pts_G[player_name == PF]))
+
+#Total Team Assists / 40min
+Team_Assists <- df_players %>%
+  with(mean(AST40[player_name == PG],
+       AST40[player_name == SF],
+       AST40[player_name == SG],
+       AST40[player_name == C],
+       AST40[player_name == PF]))
+
+#Total Team Blocks / 40min
+Team_Blocks <- df_players %>%
+  with(mean(BLK40[player_name == PG],
+       BLK40[player_name == SF],
+       BLK40[player_name == SG],
+       BLK40[player_name == C],
+       BLK40[player_name == PF]))
+
+#Total Team Rebounds / 40min
+Team_Rebounds <- df_players %>%
+  with(mean(TRB40[player_name == PG],
+       TRB40[player_name == SF],
+       TRB40[player_name == SG],
+       TRB40[player_name == C],
+       TRB40[player_name == PF]))
+
+#Total Salaries / 40min
+Team_Cost <- df_players %>%
+  with(sum(salmil[player_name == PG],
+       salmil[player_name == SF],
+       salmil[player_name == SG],
+       salmil[player_name == C],
+       salmil[player_name == PF]))
+
+Team_Points
+Team_Assists
+Team_Blocks
+Team_Rebounds
+
+Team_win <- -324 + (21.42 * Team_Points) + (-2.06 * Team_Assists) + (10.54 * Team_Blocks) + (-2.92 * Team_Rebounds)
+
+
+Team_win
+Team_Cost
 
 ```
 
-
-
-
-
-```{r}
-#TRB
-df_players %>%
-filter(G > 10, Pos %in% c("C", "PF", "PG", "SF", "SG")) %>% 
-ggplot() +
-geom_histogram(aes(x = TRB40, fill = Pos), colour = "black", bins = 40) + facet_wrap(~Pos, nrow = 5)
-
-#assist
-df_players %>%
-filter(G > 10, Pos %in% c("C", "PF", "PG", "SF", "SG")) %>% 
-ggplot() +
-geom_histogram(aes(x = AST40, fill = Pos), colour = "black", bins = 40) + facet_wrap(~Pos, nrow = 5)
-
-#pts40
-df_players %>%
-filter(G > 10, Pos %in% c("C", "PF", "PG", "SF", "SG")) %>% 
-ggplot() +
-geom_histogram(aes(x = pts40_ind, fill = Pos), colour = "black", bins = 40) + facet_wrap(~Pos, nrow = 5)
-# create panels by match_outcome
-```
-
-```{r}
-df_players %>%
-  filter(G > 10) %>%
-  ggplot() +
-  geom_boxplot(mapping = aes(x = reorder(Pos, AST40, FUN = median),
-                             y = AST40, colour = reorder(Pos, AST40,
-                                                              FUN = median))) +
-  theme(legend.position = "none",
-        axis.text.x = element_text(angle = 45))
-
-#salary by points per minutes played
-df_players40 %>% filter(G > 10, PTS > 0) %>% group_by(player_id) %>%
-  ggplot(mapping = aes(x = salmil, y = pts40_ind)) + 
-  geom_point()
-
-#salary by points per minutes played
-df_players %>% filter(G > 10) %>% group_by(player_id) %>%
-  ggplot(mapping = aes(x = salmil, y = pts40_ind, colour = Pos)) + 
-  geom_point()
-
-#player group by salmil
-df_players %>%
-  filter(G > 10) %>%
-  ggplot() +
-  geom_boxplot(mapping = aes(x = reorder(Pos, salmil, FUN = median),
-                             y = salmil, colour = reorder(Pos, salmil,
-                                                              FUN = median))) +
-  theme(legend.position = "none",
-        axis.text.x = element_text(angle = 45))
-
-```
 
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
